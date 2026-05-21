@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code — Feature Implementation Workflow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f9fc;
+    --bg2: #ffffff;
+    --bg3: #f2f6fb;
+    --bg4: #eaf1f8;
+    --surface: rgba(255,255,255,0.86);
+    --surface-strong: #ffffff;
+    --border: #dce6f1;
+    --border2: #c9d7e7;
+    --accent: #4f7cff;
+    --accent2: #1eb7a6;
+    --accent3: #f39a5b;
+    --accent4: #8b7cf6;
+    --text: #1f2a3d;
+    --text2: #536477;
+    --text3: #7a8a9c;
+    --success: #20a878;
+    --warn: #d99026;
+    --danger: #d96b6b;
+    --shadow: 0 18px 55px rgba(31,42,61,.10);
+    --shadow-soft: 0 10px 30px rgba(31,42,61,.08);
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Inter', sans-serif;
+    --body: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(circle at 8% 8%, rgba(79,124,255,.12), transparent 28%),
+      radial-gradient(circle at 90% 0%, rgba(30,183,166,.10), transparent 30%),
+      linear-gradient(180deg, #fbfdff 0%, var(--bg) 45%, #eef4fb 100%);
+    color: var(--text);
+    font-family: var(--body);
+    min-height: 100vh;
+    line-height: 1.65;
+  }
+
+  /* HEADER */
+  .site-header {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,.92), rgba(246,250,255,.78)),
+      radial-gradient(circle at 76% 24%, rgba(79,124,255,.16), transparent 34%);
+    border-bottom: 1px solid var(--border);
+    padding: 56px 64px 42px;
+    position: relative;
+    overflow: hidden;
+  }
+  .site-header::before {
+    content: '';
+    position: absolute;
+    inset: 18px 36px auto auto;
+    width: 230px;
+    height: 230px;
+    border-radius: 44px;
+    background: linear-gradient(135deg, rgba(79,124,255,.13), rgba(30,183,166,.10));
+    transform: rotate(12deg);
+    filter: blur(.1px);
+    pointer-events: none;
+  }
+  .site-header::after {
+    content: '';
+    position: absolute;
+    right: 98px;
+    top: 94px;
+    width: 118px;
+    height: 118px;
+    border-radius: 999px;
+    border: 1px solid rgba(79,124,255,.22);
+    box-shadow: 0 0 0 18px rgba(79,124,255,.045), 0 0 0 42px rgba(30,183,166,.035);
+    pointer-events: none;
+  }
+  .header-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #277b71;
+    background: rgba(30,183,166,.10);
+    border: 1px solid rgba(30,183,166,.22);
+    border-radius: 999px;
+    padding: 6px 14px;
+    margin-bottom: 20px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .header-badge::before { content: '✦'; font-size: 12px; color: var(--accent2); }
+  h1 {
+    position: relative;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-size: clamp(34px, 5vw, 58px);
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.03;
+    margin-bottom: 16px;
+    letter-spacing: -.04em;
+    max-width: 760px;
+  }
+  h1 span {
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .header-desc {
+    position: relative;
+    font-size: 16px;
+    color: var(--text2);
+    max-width: 700px;
+    font-weight: 400;
+  }
+  .header-meta { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; position: relative; }
+  .header-pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #476079;
+    background: rgba(255,255,255,.72);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 13px;
+    box-shadow: 0 8px 22px rgba(31,42,61,.05);
+  }
+
+  /* PIPELINE */
+  .pipeline-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(255,255,255,.88);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 60px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .pipeline-wrap::-webkit-scrollbar { display: none; }
+  .pipeline { display: flex; align-items: center; min-width: max-content; padding: 14px 0; }
+  .pipe-step { display: flex; align-items: center; }
+  .pipe-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: all .2s ease;
+  }
+  .pipe-btn:hover { background: #f2f6fb; border-color: var(--border); }
+  .pipe-btn.active { background: #eef4ff; border-color: rgba(79,124,255,.24); box-shadow: inset 0 0 0 1px rgba(255,255,255,.7); }
+  .pipe-num {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    width: 24px; height: 24px; border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; border: 1px solid var(--border2); color: var(--text3); flex-shrink: 0;
+  }
+  .pipe-btn.active .pipe-num { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pipe-btn.done .pipe-num { background: rgba(32,168,120,.10); border-color: rgba(32,168,120,.35); color: var(--success); }
+  .pipe-label { font-size: 12px; color: var(--text3); white-space: nowrap; font-weight: 600; }
+  .pipe-btn.active .pipe-label { color: #355ed6; }
+  .pipe-btn.done .pipe-label { color: var(--success); }
+  .pipe-arrow { color: #bcc9d8; padding: 0 2px; }
+
+  /* LAYOUT */
+  .main { display: grid; grid-template-columns: 292px minmax(0, 1fr); max-width: 1280px; margin: 0 auto; }
+  .sidebar {
+    background: rgba(255,255,255,.62);
+    border-right: 1px solid var(--border);
+    padding: 30px 0;
+    position: sticky;
+    top: 58px;
+    height: calc(100vh - 58px);
+    overflow-y: auto;
+  }
+  .sidebar-group-label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--text3); padding: 0 22px 10px; margin-bottom: 8px;
+  }
+  .sidebar-group { margin-bottom: 24px; }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 11px; padding: 10px 22px;
+    cursor: pointer; transition: all .18s; border-left: 3px solid transparent; text-decoration: none;
+  }
+  .sidebar-item:hover { background: rgba(79,124,255,.055); }
+  .sidebar-item.active { background: linear-gradient(90deg, rgba(79,124,255,.11), transparent); border-left-color: var(--accent); }
+  .sidebar-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; border: 1.5px solid var(--border2); flex-shrink: 0; }
+  .sidebar-item.active .sidebar-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79,124,255,.12); }
+  .sidebar-item.done .sidebar-dot { background: var(--success); border-color: var(--success); }
+  .sidebar-text { font-size: 13px; color: var(--text2); font-weight: 600; }
+  .sidebar-item.active .sidebar-text { color: #3157c7; }
+  .sidebar-item.done .sidebar-text { color: var(--success); }
+  .sidebar-tag { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--text3); background: var(--bg3); border-radius: 999px; padding: 3px 7px; }
+
+  .content { padding: 44px 54px 64px; max-width: 940px; width: 100%; }
+  .step-panel { display: none; }
+  .step-panel.active { display: block; animation: fadeIn .28s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .step-header {
+    margin-bottom: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 26px;
+    padding: 28px;
+    box-shadow: var(--shadow-soft);
+  }
+  .step-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .step-badge-num {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), #7896ff); color: #fff;
+    border-radius: 999px; padding: 5px 11px; letter-spacing: .04em;
+  }
+  .step-badge-tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+    color: #277b71; background: rgba(30,183,166,.10); border: 1px solid rgba(30,183,166,.20);
+    border-radius: 999px; padding: 5px 11px;
+  }
+  .step-title { font-family: 'Inter', 'Segoe UI', sans-serif; font-size: 29px; font-weight: 750; color: var(--text); margin-bottom: 9px; letter-spacing: -.02em; }
+  .step-desc { font-size: 15px; color: var(--text2); max-width: 720px; line-height: 1.75; }
+
+  .section { margin-bottom: 28px; }
+  .section-title { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .cmd-block {
+    background: #fbfdff;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow-soft);
+  }
+  .cmd-block:hover { border-color: var(--border2); transform: translateY(-1px); transition: all .2s ease; }
+  .cmd-bar { display: flex; align-items: center; gap: 6px; padding: 10px 15px; border-bottom: 1px solid var(--border); background: #f5f8fc; }
+  .cmd-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .cmd-dot.r { background: #ff7a70; } .cmd-dot.y { background: #f9c65d; } .cmd-dot.g { background: #53d68a; }
+  .cmd-bar-label { margin-left: 7px; font-family: var(--mono); font-size: 10px; color: var(--text3); flex: 1; }
+  .cmd-copy { font-family: var(--mono); font-size: 10px; color: var(--text3); background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+  .cmd-line { display: flex; align-items: flex-start; gap: 11px; padding: 12px 16px 4px; }
+  .cmd-prompt { font-family: var(--mono); font-size: 13px; color: var(--accent2); font-weight: 700; flex-shrink: 0; padding-top: 1px; }
+  .cmd-prompt.shell { color: var(--accent); } .cmd-prompt.claude { color: var(--accent4); } .cmd-prompt.config { color: var(--accent3); }
+  .cmd-text { font-family: var(--mono); font-size: 13px; color: #2f3f54; line-height: 1.55; word-break: break-word; }
+  .cmd-text .kw { color: #3157c7; font-weight: 600; } .cmd-text .str { color: #138a7c; } .cmd-text .flag { color: #745ee8; } .cmd-text .comment { color: var(--text3); }
+  .cmd-note { font-size: 12.5px; color: var(--text2); padding: 6px 16px 12px 43px; line-height: 1.55; }
+  .cmd-note::before { content: '↳ '; color: var(--text3); }
+
+  .options-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+  .option-card {
+    background: var(--surface-strong); border: 1px solid var(--border); border-radius: 18px; padding: 18px;
+    cursor: pointer; transition: all .2s; box-shadow: 0 8px 24px rgba(31,42,61,.055);
+  }
+  .option-card:hover { border-color: rgba(79,124,255,.35); transform: translateY(-2px); }
+  .option-card.selected { border-color: rgba(79,124,255,.45); background: #f4f7ff; box-shadow: 0 12px 30px rgba(79,124,255,.10); }
+  .option-letter { font-family: var(--mono); font-size: 10px; font-weight: 700; color: #3157c7; background: rgba(79,124,255,.12); border-radius: 999px; padding: 4px 9px; display: inline-block; margin-bottom: 10px; letter-spacing: .06em; }
+  .option-title { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.45; }
+
+  .checklist { list-style: none; margin-bottom: 16px; background: rgba(255,255,255,.66); border: 1px solid var(--border); border-radius: 18px; padding: 8px 18px; }
+  .checklist li { display: flex; align-items: flex-start; gap: 11px; font-size: 14px; color: var(--text2); padding: 11px 0; border-bottom: 1px solid #edf2f7; }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li::before { content: '✓'; color: var(--accent2); font-family: var(--mono); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .checklist li strong { color: var(--text); font-weight: 700; }
+  code { font-family: var(--mono); font-size: 11px; background: #eef3fa; border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; color: #684fdc; }
+
+  .callout { border-radius: 18px; padding: 16px 18px; margin-top: 18px; font-size: 14px; line-height: 1.65; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 8px 24px rgba(31,42,61,.05); }
+  .callout-icon { font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+  .callout.warn { background: #fff8e9; border: 1px solid #f2d7a4; color: #70501e; }
+  .callout.info { background: #eef5ff; border: 1px solid #cbdcff; color: #35517d; }
+  .callout.success { background: #edf9f5; border: 1px solid #bde8dc; color: #285f51; }
+  .callout strong { font-weight: 700; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .flow-diagram { background: var(--surface-strong); border: 1px solid var(--border); border-radius: 24px; padding: 28px; margin-bottom: 26px; display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; box-shadow: var(--shadow-soft); }
+  .flow-node { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .flow-box { background: #fff; border: 1px solid var(--border2); border-radius: 14px; padding: 12px 16px; font-family: var(--mono); font-size: 11px; color: var(--text); text-align: center; min-width: 104px; white-space: nowrap; box-shadow: 0 8px 18px rgba(31,42,61,.06); }
+  .flow-box.accent { border-color: rgba(79,124,255,.35); color: #3157c7; background: #f4f7ff; }
+  .flow-box.success { border-color: rgba(32,168,120,.35); color: var(--success); background: #edf9f5; }
+  .flow-box.warn { border-color: rgba(217,144,38,.35); color: var(--warn); background: #fff8e9; }
+  .flow-box.accent2 { border-color: rgba(139,124,246,.35); color: #684fdc; background: #f5f3ff; }
+  .flow-sub { font-size: 10.5px; color: var(--text3); text-align: center; }
+  .flow-arrow { font-size: 18px; color: #a9b8c9; margin: 0 12px; align-self: center; }
+
+  .deploy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+  .deploy-card { background: var(--surface-strong); border: 1px solid var(--border); border-radius: 20px; padding: 18px; box-shadow: var(--shadow-soft); }
+  .deploy-card-title { font-family: var(--mono); font-size: 11px; font-weight: 700; color: #c36f2f; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
+  .deploy-card-title::before { content: '▸'; color: var(--accent3); }
+  .deploy-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 0; border-bottom: 1px solid #edf2f7; font-size: 12.5px; }
+  .deploy-row:last-child { border-bottom: none; }
+  .deploy-key { color: var(--text3); }
+  .deploy-val { color: var(--text); font-family: var(--mono); font-size: 11px; text-align: right; }
+
+  .cicd-row { display: flex; align-items: stretch; gap: 0; margin-bottom: 18px; background: var(--surface-strong); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-soft); }
+  .cicd-label { writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg); font-family: var(--mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #fff; padding: 18px 11px; display: flex; align-items: center; justify-content: center; min-width: 38px; font-weight: 700; }
+  .cicd-label.ci { background: linear-gradient(180deg, #6f8cff, var(--accent)); }
+  .cicd-label.cd { background: linear-gradient(180deg, #43d0bf, var(--accent2)); }
+  .cicd-steps { display: flex; align-items: center; gap: 7px; padding: 18px; flex-wrap: wrap; flex: 1; }
+  .cicd-step { display: flex; align-items: center; gap: 6px; }
+  .cicd-box { background: #f7faff; border: 1px solid var(--border); border-radius: 12px; padding: 9px 12px; font-size: 12px; color: var(--text2); font-weight: 700; white-space: nowrap; }
+  .cicd-box .num { font-family: var(--mono); font-size: 9px; color: var(--text3); display: block; margin-bottom: 2px; }
+  .cicd-arr { color: #a9b8c9; font-size: 14px; }
+  .cicd-result { font-family: var(--mono); font-size: 11px; padding: 9px 12px; border-radius: 12px; font-weight: 700; }
+  .cicd-result.pass { background: #edf9f5; color: var(--success); border: 1px solid #bde8dc; }
+  .cicd-result.auto { background: #eef5ff; color: #3157c7; border: 1px solid #cbdcff; }
+
+  .step-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 42px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .step-progress { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+  .step-progress span { color: var(--accent); font-weight: 700; }
+  .btn-group { display: flex; gap: 10px; }
+  .btn { font-family: var(--body); font-size: 13px; font-weight: 700; padding: 10px 22px; border-radius: 999px; border: 1px solid var(--border2); background: #fff; color: var(--text2); cursor: pointer; transition: all .2s; box-shadow: 0 8px 18px rgba(31,42,61,.055); }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); color: var(--text); border-color: rgba(79,124,255,.32); }
+  .btn:disabled { opacity: .38; cursor: default; box-shadow: none; }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), #7592ff); border-color: transparent; color: #fff; }
+  .btn.primary:hover { box-shadow: 0 12px 24px rgba(79,124,255,.22); }
+
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c7d5e5; border-radius: 999px; }
+
+  @media (max-width: 900px) {
+    .site-header { padding: 34px 22px 28px; }
+    .site-header::before, .site-header::after { display: none; }
+    .pipeline-wrap { padding: 0 16px; }
+    .main { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .content { padding: 26px 18px 48px; max-width: none; }
+    .step-header { padding: 22px; border-radius: 22px; }
+    .options-grid, .two-col, .deploy-grid { grid-template-columns: 1fr; }
+    .flow-diagram { flex-direction: column; align-items: stretch; }
+    .flow-arrow { transform: rotate(90deg); margin: 6px 0; }
+    .flow-node { width: 100%; }
+    .flow-box { width: 100%; }
+    .cicd-steps { gap: 6px; }
+    .step-footer { flex-direction: column; align-items: flex-start; gap: 16px; }
+  }
+
+.hero-visual{
+  display:flex;
+  gap:16px;
+  margin:28px 0 8px;
+  flex-wrap:wrap;
+}
+.hero-card{
+  background:rgba(255,255,255,0.7);
+  border:1px solid rgba(0,0,0,0.06);
+  backdrop-filter:blur(10px);
+  border-radius:18px;
+  padding:16px 22px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  box-shadow:0 8px 30px rgba(0,0,0,0.05);
+  transition:all .25s ease;
+}
+.hero-card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 12px 35px rgba(0,0,0,0.08);
+}
+.hero-icon{
+  width:42px;
+  height:42px;
+  border-radius:12px;
+  background:linear-gradient(135deg,#eef4ff,#f6faff);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#4f8ef7;
+  font-size:18px;
+}
+.hero-label{
+  font-size:14px;
+  font-weight:600;
+  color:#334155;
+}
+
+.step-title::before{
+  content:'';
+  display:inline-block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#4f8ef7;
+  margin-right:12px;
+  vertical-align:middle;
+  box-shadow:0 0 0 6px rgba(79,142,247,0.12);
+}
+
+.section-title i{
+  color:#4f8ef7;
+}
+
+.cmd-block{
+  box-shadow:0 8px 24px rgba(15,23,42,0.04);
+}
+
+.option-card,
+.deploy-card,
+.flow-box,
+.cicd-row{
+  box-shadow:0 6px 20px rgba(15,23,42,0.04);
+}
+
+@media (max-width:768px){
+  .hero-card{
+    width:100%;
+  }
+}
+
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-badge">Claude Code · Git · GitHub</div>
+  <h1>Feature Implementation <span>Workflow</span></h1>
+  <p class="header-desc">A complete reference for implementing features and fixing bugs in a collaborative codebase using Claude Code, Git, and GitHub.</p>
+  
+<div class="hero-visual">
+  <div class="hero-card">
+    <div class="hero-icon"><i class="fa-solid fa-code-branch"></i></div>
+    <div class="hero-label">Git Workflow</div>
+  </div>
+  <div class="hero-card">
+    <div class="hero-icon"><i class="fa-solid fa-robot"></i></div>
+    <div class="hero-label">Claude Code</div>
+  </div>
+  <div class="hero-card">
+    <div class="hero-icon"><i class="fa-solid fa-shield-halved"></i></div>
+    <div class="hero-label">Security Fixes</div>
+  </div>
+</div>
+
+<div class="header-meta">
+    <span class="header-pill">11 Steps</span>
+    <span class="header-pill">Claude Code Sessions</span>
+    <span class="header-pill">Git Branching Strategy</span>
+    <span class="header-pill">CI/CD · Render Deployment</span>
+  </div>
+</header>
+
+<!-- Pipeline Bar -->
+<div class="pipeline-wrap">
+  <div class="pipeline" id="pipeline">
+    <!-- JS rendered -->
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Setup</div>
+      <a class="sidebar-item active" onclick="goTo(0)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Connect Repo</span>
+        <span class="sidebar-tag">Step 1</span>
+      </a>
+      <a class="sidebar-item" onclick="goTo(1)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Create Branch</span>
+        <span class="sidebar-tag">Step 2</span>
+      </a>
+      <a class="sidebar-item" onclick="goTo(2)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Claude Session</span>
+        <span class="sidebar-tag">Step 3</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">AI Development Loop</div>
+      <a class="sidebar-item" onclick="goTo(3)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Write Specification</span>
+        <span class="sidebar-tag">Step 4</span>
+      </a>
+      <a class="sidebar-item" onclick="goTo(4)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Plan Mode</span>
+        <span class="sidebar-tag">Step 5</span>
+      </a>
+      <a class="sidebar-item" onclick="goTo(5)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Execute Plan</span>
+        <span class="sidebar-tag">Step 6</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Collaboration</div>
+      <a class="sidebar-item" onclick="goTo(6)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Commit & Push</span>
+        <span class="sidebar-tag">Step 7</span>
+      </a>
+      <a class="sidebar-item" onclick="goTo(7)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Open PR</span>
+        <span class="sidebar-tag">Step 8</span>
+      </a>
+      <a class="sidebar-item" onclick="goTo(8)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Review & Merge</span>
+        <span class="sidebar-tag">Step 9</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Ship It</div>
+      <a class="sidebar-item" onclick="goTo(9)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">Deploy</span>
+        <span class="sidebar-tag">Step 10</span>
+      </a>
+      <a class="sidebar-item" onclick="goTo(10)">
+        <span class="sidebar-dot"></span>
+        <span class="sidebar-text">CI/CD Pipeline</span>
+        <span class="sidebar-tag">Step 11</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- STEP 1 -->
+    <div class="step-panel active" id="step-0">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 01</span>
+          <span class="step-badge-tag">Repository Setup</span>
+        </div>
+        <h2 class="step-title">Connect Local Repo with GitHub</h2>
+        <p class="step-desc">Establish the link between your local working directory and a remote GitHub repository. Select the scenario that matches your situation.</p>
+      </div>
+
+      <div class="options-grid">
+        <div class="option-card selected" onclick="selectOption(this, 'opt-a')">
+          <span class="option-letter">Option A</span>
+          <div class="option-title">Brand-new repo on machine → blank GitHub repo</div>
+        </div>
+        <div class="option-card" onclick="selectOption(this, 'opt-b')">
+          <span class="option-letter">Option B</span>
+          <div class="option-title">Clone an existing GitHub repository</div>
+        </div>
+        <div class="option-card" onclick="selectOption(this, 'opt-c')">
+          <span class="option-letter">Option C</span>
+          <div class="option-title">Resume work on already-cloned repo</div>
+        </div>
+      </div>
+
+      <div id="opt-a">
+        <div class="section">
+          <div class="section-title"><i class="fa-regular fa-folder-open"></i> Initialise and push to GitHub</div>
+          <div class="cmd-block">
+            <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">terminal · project root</span></div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> init</span></div>
+            <div class="cmd-note">Initialise a new Git repository in the project root directory</div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> add .</span></div>
+            <div class="cmd-note">Stage all project files for the initial commit</div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> commit -m <span class="str">"Initial commit"</span></span></div>
+            <div class="cmd-note">Record the staged snapshot as the first commit</div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> branch <span class="flag">-M</span> main</span></div>
+            <div class="cmd-note">Rename the default branch to <em>main</em></div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> remote add origin https://github.com/arifpucit/vuln-app-cc.git</span></div>
+            <div class="cmd-note">Register the remote GitHub URL as the <em>origin</em> remote</div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> remote <span class="flag">-v</span></span></div>
+            <div class="cmd-note">Verify the remote connection — displays fetch and push URLs</div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> push <span class="flag">-u</span> origin main</span></div>
+            <div class="cmd-note">Push to GitHub and set upstream tracking. Use <strong>PATs</strong> or <strong>SSH keys</strong> for authentication</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="opt-b" style="display:none">
+        <div class="section">
+          <div class="section-title"><i class="fa-regular fa-folder-open"></i> Clone and verify remote</div>
+          <div class="cmd-block">
+            <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">terminal</span></div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> clone https://github.com/arifpucit/vuln-app-cc.git</span></div>
+            <div class="cmd-note">Download the repository and create a full local copy</div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">cd</span> vuln-app-cc</span></div>
+            <div class="cmd-note">Enter the cloned project directory</div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> remote <span class="flag">-v</span></span></div>
+            <div class="cmd-note">Confirm the local repo is connected to the remote GitHub repo</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="opt-c" style="display:none">
+        <div class="section">
+          <div class="section-title"><i class="fa-regular fa-folder-open"></i> Sync with latest upstream changes</div>
+          <div class="cmd-block">
+            <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">terminal · inside repo directory</span></div>
+            <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> checkout main <span class="flag">&&</span> <span class="kw">git</span> pull origin main</span></div>
+            <div class="cmd-note">Switch to main and fetch the latest changes from GitHub before starting new work</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-footer">
+        <span class="step-progress">Step <span>1</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" disabled>← Prev</button>
+          <button class="btn primary" onclick="goTo(1)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step-panel" id="step-1">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 02</span>
+          <span class="step-badge-tag">Branching Strategy</span>
+        </div>
+        <h2 class="step-title">Create a Feature Branch</h2>
+        <p class="step-desc">Always isolate new work — whether a bug fix or a new feature — in a dedicated branch. This keeps <code style="font-family:var(--mono);font-size:12px;background:var(--bg3);border-radius:4px;padding:1px 6px;color:var(--accent4)">main</code> stable and enables clean pull requests and peer review.</p>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Create and switch to a new branch</div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">terminal</span></div>
+          <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> checkout <span class="flag">-b</span> bugs/sqli-fix</span></div>
+          <div class="cmd-note">Creates branch <em>bugs/sqli-fix</em> and switches to it immediately. The <strong>-b</strong> flag combines create + checkout in one command</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Recommended branch naming conventions</div>
+        <ul class="checklist">
+          <li><strong>bugs/</strong> prefix — for defect and vulnerability fixes, e.g. <code>bugs/sqli-fix</code></li>
+          <li><strong>feature/</strong> prefix — for new functionality, e.g. <code>feature/auth-mfa</code></li>
+          <li><strong>hotfix/</strong> prefix — for urgent production patches, e.g. <code>hotfix/null-pointer</code></li>
+          <li><strong>refactor/</strong> prefix — for code quality improvements without behaviour change</li>
+        </ul>
+      </div>
+      <div class="callout warn">
+        <span class="callout-icon">⚠</span>
+        <span>Never commit directly to <strong>main</strong> in a collaborative project. Every change — even a one-line fix — belongs on a dedicated branch to preserve a clean review and merge history.</span>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>2</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(0)">← Prev</button>
+          <button class="btn primary" onclick="goTo(2)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step-panel" id="step-2">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 03</span>
+          <span class="step-badge-tag">Session Setup</span>
+        </div>
+        <h2 class="step-title">Start a Named Claude Code Session</h2>
+        <p class="step-desc">Open VS Code and initialise a named Claude Code session. Each session receives an isolated context window — naming it prevents contamination from prior sessions and ensures the agent reasons about the current task in clean isolation.</p>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Launch VS Code and configure the session</div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">terminal</span></div>
+          <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">code</span> .</span></div>
+          <div class="cmd-note">Open the current directory in VS Code</div>
+        </div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">Claude Code · slash command</span></div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">/</span> rename bugs/sqli-fix</span></div>
+          <div class="cmd-note">Name this Claude Code session after the current branch. Aligns the agent's context window to the task at hand</div>
+        </div>
+      </div>
+      <div class="callout info">
+        <span class="callout-icon">ℹ</span>
+        <span>Claude Code sessions are <strong>stateless and isolated</strong>. Context does not carry over between sessions. Session naming is a professional hygiene practice — it prevents the agent from reasoning with stale context from previous unrelated tasks.</span>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>3</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(1)">← Prev</button>
+          <button class="btn primary" onclick="goTo(3)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step-panel" id="step-3">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 04</span>
+          <span class="step-badge-tag">Specification</span>
+        </div>
+        <h2 class="step-title">Author the Specification File</h2>
+        <p class="step-desc">Before writing any code, produce a human-readable specification that precisely defines what the fix or feature must accomplish. Co-author it with AI assistance, but a human engineer must review and finalise it.</p>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Prompt Claude Code to draft the specification</div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">Claude Code · natural language prompt</span></div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text">Describe the SQLi vulnerability in the login endpoint and write a complete specification for fixing it. Save to <span class="str">.claude/specs/sqli-fix.md</span></span></div>
+          <div class="cmd-note">Claude Code drafts the specification collaboratively. Always review every assumption and acceptance criterion before proceeding</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Specification file lifecycle</div>
+        <ul class="checklist">
+          <li><strong>Collaborate</strong> with Claude Code to produce the initial draft</li>
+          <li><strong>Review</strong> all assumptions, edge cases, and acceptance criteria carefully</li>
+          <li><strong>Finalise</strong> and save to <code>vuln-app-cc/.claude/specs/sqli-fix.md</code></li>
+          <li>The spec file becomes the <strong>single source of truth</strong> for all subsequent planning and implementation</li>
+          <li>A good spec reduces AI hallucinations and misaligned implementations significantly</li>
+        </ul>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>4</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(2)">← Prev</button>
+          <button class="btn primary" onclick="goTo(4)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step-panel" id="step-4">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 05</span>
+          <span class="step-badge-tag">Plan Mode</span>
+        </div>
+        <h2 class="step-title">Switch to Plan Mode — Author the Plan File</h2>
+        <p class="step-desc">Enter Claude Code's Plan Mode to generate a structured, file-by-file implementation plan without writing any code. Review and finalise the plan before proceeding to execution.</p>
+      </div>
+      <div class="two-col">
+        <div class="section">
+          <div class="section-title"><i class="fa-regular fa-folder-open"></i> Activate Plan Mode</div>
+          <div class="cmd-block">
+            <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">Claude Code</span></div>
+            <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">/plan</span></span></div>
+            <div class="cmd-note">Use the <strong>/plan</strong> slash command, or press <strong>Shift+Tab</strong> twice to toggle Plan Mode</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title"><i class="fa-regular fa-folder-open"></i> Instruct Claude Code to plan</div>
+          <div class="cmd-block">
+            <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">Claude Code · Plan Mode</span></div>
+            <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text">Analyse the codebase and <span class="str">.claude/specs/sqli-fix.md</span> — produce a detailed plan file-by-file and function-by-function without writing any code. Save to <span class="str">.claude/specs/sqli-fix-plan.md</span></span></div>
+            <div class="cmd-note">Claude Code inspects the codebase and emits a structured plan. Zero code is written at this stage</div>
+          </div>
+        </div>
+      </div>
+      <div class="callout success">
+        <span class="callout-icon">✦</span>
+        <span><strong>Plan Mode separates thinking from doing.</strong> The agent reasons about architecture and design first — this reduces wasted code generation, misaligned implementations, and context exhaustion on large codebases.</span>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>5</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(3)">← Prev</button>
+          <button class="btn primary" onclick="goTo(5)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6 -->
+    <div class="step-panel" id="step-5">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 06</span>
+          <span class="step-badge-tag">Execution</span>
+        </div>
+        <h2 class="step-title">Execute the Plan — Review &amp; Validate</h2>
+        <p class="step-desc">Instruct Claude Code to implement the plan. It will edit source files, write functions, create tests, and update configurations. MCP servers, hooks, and subagents may be invoked automatically if configured.</p>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Trigger plan execution</div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">Claude Code</span></div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text">Execute the implementation plan in <span class="str">.claude/specs/sqli-fix-plan.md</span></span></div>
+          <div class="cmd-note">Claude Code begins editing files per the plan. Monitor all output and diffs carefully before accepting changes</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> What happens during execution</div>
+        <ul class="checklist">
+          <li>Claude Code <strong>edits source files</strong> and writes or modifies functions as per the plan</li>
+          <li>Creates or updates <strong>unit and integration tests</strong></li>
+          <li>Updates <strong>configuration files</strong> (e.g. requirements.txt, env files, settings)</li>
+          <li>May invoke <strong>MCP servers</strong>, <strong>hooks</strong>, or <strong>subagents</strong> if configured for the project</li>
+          <li><strong>Run the application locally</strong> to validate the fix or feature end-to-end</li>
+          <li><strong>Review all diffs</strong> — accept, reject, or guide Claude Code to revise before committing</li>
+        </ul>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>6</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(4)">← Prev</button>
+          <button class="btn primary" onclick="goTo(6)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 7 -->
+    <div class="step-panel" id="step-6">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 07</span>
+          <span class="step-badge-tag">Version Control</span>
+        </div>
+        <h2 class="step-title">Commit and Push Changes</h2>
+        <p class="step-desc">Once you have tested and validated the implementation locally, commit your changes with a descriptive message and push the feature branch to the remote GitHub repository. All shell commands can be run directly within Claude Code using the <code style="font-family:var(--mono);font-size:12px;background:var(--bg3);border-radius:4px;padding:1px 6px;color:var(--accent3)">!</code> prefix.</p>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Stage, commit, and push from within Claude Code</div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">Claude Code · ! prefix runs shell commands</span></div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">!</span> git add .</span></div>
+          <div class="cmd-note">The <strong>!</strong> prefix executes shell commands from within Claude Code. Stages all modified and new files</div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">!</span> git commit -m <span class="str">"Fix SQLi vulnerability in login endpoint"</span></span></div>
+          <div class="cmd-note">Write a clear, imperative-mood message: what changed and why. This message is permanent project documentation</div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">!</span> git push origin bugs/sqli-fix</span></div>
+          <div class="cmd-note">Push the feature branch to GitHub. This does <strong>not</strong> affect <em>main</em> — changes stay isolated on the feature branch</div>
+        </div>
+      </div>
+      <div class="callout warn">
+        <span class="callout-icon">⚠</span>
+        <span>Write commit messages in <strong>imperative mood</strong>: "Fix…", "Add…", "Refactor…". Avoid vague messages like "update" or "fix bug". Good commit messages are the project's long-term documentation and invaluable during debugging.</span>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>7</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(5)">← Prev</button>
+          <button class="btn primary" onclick="goTo(7)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 8 -->
+    <div class="step-panel" id="step-7">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 08</span>
+          <span class="step-badge-tag">Pull Request</span>
+        </div>
+        <h2 class="step-title">Open a Pull Request on GitHub</h2>
+        <p class="step-desc">A Pull Request (PR) is a formal proposal to merge changes from your feature branch into the target branch. It initiates code review, discussion, and quality gates before changes reach <em>main</em>.</p>
+      </div>
+      <div class="flow-diagram">
+        <div class="flow-node">
+          <div class="flow-box accent2">bugs/sqli-fix</div>
+          <div class="flow-sub">Source branch</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-box warn">Pull Request</div>
+          <div class="flow-sub">Review &amp; discussion</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="flow-box success">main</div>
+          <div class="flow-sub">Target branch</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> PR creation steps on GitHub</div>
+        <ul class="checklist">
+          <li>Navigate to the repository on <strong>GitHub.com</strong> — you will see a banner for the recently pushed branch</li>
+          <li>Click the green <strong>"Compare &amp; pull request"</strong> button next to the branch banner</li>
+          <li>Set <strong>base branch</strong> to <code>main</code> — this is the merge target</li>
+          <li>Set <strong>compare branch</strong> to <code>bugs/sqli-fix</code> — this contains your changes</li>
+          <li>Write a clear <strong>title</strong> and a detailed <strong>description</strong> explaining what changed and why</li>
+          <li>Click <strong>"Create pull request"</strong> to formally submit your changes for team review</li>
+        </ul>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>8</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(6)">← Prev</button>
+          <button class="btn primary" onclick="goTo(8)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 9 -->
+    <div class="step-panel" id="step-8">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 09</span>
+          <span class="step-badge-tag">Review &amp; Merge</span>
+        </div>
+        <h2 class="step-title">Review, Merge the PR, and Clean Up</h2>
+        <p class="step-desc">Team members review the diff, discuss changes, and test locally. Once approved, the maintainer merges into main. Merge conflicts — when the same line has diverged in both branches — must be resolved before merging.</p>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Post-merge local cleanup</div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">Claude Code · post-merge</span></div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">!</span> git checkout main</span></div>
+          <div class="cmd-note">Switch back to the main branch locally</div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">!</span> git pull origin main</span></div>
+          <div class="cmd-note">Pull the newly merged changes — your local main now includes the fix</div>
+          <div class="cmd-line"><span class="cmd-prompt claude">›</span><span class="cmd-text"><span class="kw">!</span> git branch <span class="flag">-d</span> bugs/sqli-fix</span></div>
+          <div class="cmd-note">Delete the local feature branch — it has been merged and is no longer needed</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Optional — Create and push a release tag</div>
+        <div class="cmd-block">
+          <div class="cmd-bar"><span class="cmd-dot r"></span><span class="cmd-dot y"></span><span class="cmd-dot g"></span><span class="cmd-bar-label">terminal · tagging a release</span></div>
+          <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> tag <span class="flag">-a</span> v1.0.0 <span class="flag">-m</span> <span class="str">"Release version v1.0.0"</span></span></div>
+          <div class="cmd-note">Annotated tags bookmark a specific commit in Git history with a human-readable message</div>
+          <div class="cmd-line"><span class="cmd-prompt shell">$</span><span class="cmd-text"><span class="kw">git</span> push origin v1.0.0</span></div>
+          <div class="cmd-note">Push the tag to GitHub. Then navigate to Releases → "Create a new release" on the GitHub repo page</div>
+        </div>
+      </div>
+      <div class="callout warn">
+        <span class="callout-icon">⚠</span>
+        <span>Keep branches <strong>short-lived</strong>. Long-lived branches accumulate divergence from main and produce difficult merge conflicts. Merge often, delete promptly. If main changes while you are working on a feature, run <code style="font-family:var(--mono);font-size:11px;background:#eef3fa;border:1px solid #dce6f1;border-radius:6px;padding:2px 6px">git checkout main && git pull origin main</code> to sync before continuing.</span>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>9</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(7)">← Prev</button>
+          <button class="btn primary" onclick="goTo(9)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 10 -->
+    <div class="step-panel" id="step-9">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 10</span>
+          <span class="step-badge-tag">Deployment</span>
+        </div>
+        <h2 class="step-title">Deploy the Project via Render</h2>
+        <p class="step-desc">Deploy your FastAPI application as a public web service using Render.com — a GitHub-integrated platform that builds and hosts your application automatically on every push.</p>
+      </div>
+      <div class="deploy-grid">
+        <div class="deploy-card">
+          <div class="deploy-card-title">Service Configuration</div>
+          <div class="deploy-row"><span class="deploy-key">Environment</span><span class="deploy-val">Python 3.11</span></div>
+          <div class="deploy-row"><span class="deploy-key">Build Command</span><span class="deploy-val">pip install -r backend/requirements.txt</span></div>
+          <div class="deploy-row"><span class="deploy-key">Start Command</span><span class="deploy-val">python backend/app/main.py</span></div>
+          <div class="deploy-row"><span class="deploy-key">Plan</span><span class="deploy-val">Free Tier</span></div>
+        </div>
+        <div class="deploy-card">
+          <div class="deploy-card-title">Render Actions</div>
+          <div class="deploy-row"><span class="deploy-key">Step 1</span><span class="deploy-val">Sign up at render.com</span></div>
+          <div class="deploy-row"><span class="deploy-key">Step 2</span><span class="deploy-val">New Web Service</span></div>
+          <div class="deploy-row"><span class="deploy-key">Step 3</span><span class="deploy-val">Connect GitHub repo</span></div>
+          <div class="deploy-row"><span class="deploy-key">Step 4</span><span class="deploy-val">Authorize + Configure</span></div>
+          <div class="deploy-row"><span class="deploy-key">Step 5</span><span class="deploy-val">Create Web Service</span></div>
+        </div>
+      </div>
+      <div class="callout success">
+        <span class="callout-icon">✓</span>
+        <span>Render automatically runs your build command, starts your FastAPI app, and assigns a public URL. Your application is <strong>live after the deployment completes</strong> at <code style="font-family:var(--mono);font-size:11px;background:#eef3fa;border:1px solid #dce6f1;border-radius:6px;padding:2px 6px">https://your-app-name.onrender.com</code></span>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>10</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(8)">← Prev</button>
+          <button class="btn primary" onclick="goTo(10)">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 11 -->
+    <div class="step-panel" id="step-10">
+      <div class="step-header">
+        <div class="step-meta">
+          <span class="step-badge-num">Step 11</span>
+          <span class="step-badge-tag">CI/CD</span>
+        </div>
+        <h2 class="step-title">Automate with GitHub Actions (CI/CD)</h2>
+        <p class="step-desc">GitHub Actions automates building, testing, and deploying your application every time code is pushed. This eliminates manual steps, enforces quality gates, and enables true continuous delivery.</p>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Continuous Integration — verify every push</div>
+        <div class="cicd-row">
+          <div class="cicd-label ci">CI</div>
+          <div class="cicd-steps">
+            <div class="cicd-step">
+              <div class="cicd-box"><span class="num">Trigger</span>git push</div>
+            </div>
+            <span class="cicd-arr">→</span>
+            <div class="cicd-step">
+              <div class="cicd-box"><span class="num">Step 1</span>Checkout code</div>
+            </div>
+            <span class="cicd-arr">→</span>
+            <div class="cicd-step">
+              <div class="cicd-box"><span class="num">Step 2</span>Install deps</div>
+            </div>
+            <span class="cicd-arr">→</span>
+            <div class="cicd-step">
+              <div class="cicd-box"><span class="num">Step 3</span>Run tests</div>
+            </div>
+            <span class="cicd-arr">→</span>
+            <div class="cicd-result pass">Pass ✓ / Fail ✗</div>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title"><i class="fa-regular fa-folder-open"></i> Continuous Delivery — ship automatically after CI passes</div>
+        <div class="cicd-row">
+          <div class="cicd-label cd">CD</div>
+          <div class="cicd-steps">
+            <div class="cicd-step">
+              <div class="cicd-box"><span class="num">Trigger</span>CI passes on main</div>
+            </div>
+            <span class="cicd-arr">→</span>
+            <div class="cicd-step">
+              <div class="cicd-box"><span class="num">Step 1</span>Build artefact</div>
+            </div>
+            <span class="cicd-arr">→</span>
+            <div class="cicd-step">
+              <div class="cicd-box"><span class="num">Step 2</span>Deploy to prod</div>
+            </div>
+            <span class="cicd-arr">→</span>
+            <div class="cicd-result auto">Auto-deployed ↗</div>
+          </div>
+        </div>
+      </div>
+      <div class="callout info">
+        <span class="callout-icon">ℹ</span>
+        <span>CI/CD transforms deployment from a manual, error-prone event into a routine automated process. GitHub Actions workflows are defined in <code style="font-family:var(--mono);font-size:11px;background:#eef3fa;border:1px solid #dce6f1;border-radius:6px;padding:2px 6px">.github/workflows/*.yml</code> and are version-controlled alongside the application code. <strong>Continuous Deployment can be configured to ship automatically once all CI checks pass, but teams may also add manual approvals for production.</span></span>
+      </div>
+      <div class="step-footer">
+        <span class="step-progress">Step <span>11</span> of 11</span>
+        <div class="btn-group">
+          <button class="btn" onclick="goTo(9)">← Prev</button>
+          <button class="btn" disabled style="opacity:0.35">Complete ✓</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const STEPS = [
+  { num: "01", label: "Connect Repo" },
+  { num: "02", label: "Branch" },
+  { num: "03", label: "Session" },
+  { num: "04", label: "Spec" },
+  { num: "05", label: "Plan" },
+  { num: "06", label: "Execute" },
+  { num: "07", label: "Commit" },
+  { num: "08", label: "PR" },
+  { num: "09", label: "Merge" },
+  { num: "10", label: "Deploy" },
+  { num: "11", label: "CI/CD" }
+];
+
+let current = 0;
+
+function buildPipeline() {
+  const pipeline = document.getElementById('pipeline');
+  pipeline.innerHTML = STEPS.map((s, i) => {
+    const arrow = i < STEPS.length - 1 ? '<span class="pipe-arrow">›</span>' : '';
+    return `<div class="pipe-step">
+      <button class="pipe-btn${i===0?' active':''}" id="pbtn-${i}" onclick="goTo(${i})">
+        <span class="pipe-num">${s.num}</span>
+        <span class="pipe-label">${s.label}</span>
+      </button>${arrow}
+    </div>`;
+  }).join('');
+}
+
+function goTo(idx) {
+  document.getElementById(`step-${current}`).classList.remove('active');
+  document.getElementById(`pbtn-${current}`).classList.remove('active');
+  const sidebarItems = document.querySelectorAll('.sidebar-item');
+  if (sidebarItems[current]) sidebarItems[current].classList.remove('active');
+
+  for (let i = 0; i < current; i++) {
+    document.getElementById(`pbtn-${i}`).classList.add('done');
+    if (sidebarItems[i]) sidebarItems[i].classList.add('done');
+  }
+
+  current = idx;
+  document.getElementById(`step-${current}`).classList.add('active');
+  document.getElementById(`pbtn-${current}`).classList.add('active');
+  document.getElementById(`pbtn-${current}`).classList.remove('done');
+  if (sidebarItems[current]) { sidebarItems[current].classList.add('active'); sidebarItems[current].classList.remove('done'); }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function selectOption(el, id) {
+  document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  ['opt-a','opt-b','opt-c'].forEach(o => {
+    const el2 = document.getElementById(o);
+    if (el2) el2.style.display = o === id ? 'block' : 'none';
+  });
+}
+
+buildPipeline();
+</script>
+</body>
+</html>
