@@ -1061,6 +1061,7 @@ const STEPS = [
 ];
 
 let current = 0;
+const visitedSteps = new Set([0]);
 
 function buildPipeline() {
   const pipeline = document.getElementById('pipeline');
@@ -1076,21 +1077,33 @@ function buildPipeline() {
 }
 
 function goTo(idx) {
+  const previous = current;
+
   document.getElementById(`step-${current}`).classList.remove('active');
   document.getElementById(`pbtn-${current}`).classList.remove('active');
+
   const sidebarItems = document.querySelectorAll('.sidebar-item');
   if (sidebarItems[current]) sidebarItems[current].classList.remove('active');
 
-  for (let i = 0; i < current; i++) {
-    document.getElementById(`pbtn-${i}`).classList.add('done');
-    if (sidebarItems[i]) sidebarItems[i].classList.add('done');
-  }
+  // Mark only the tab the user actually left as completed.
+  // This prevents skipped tabs from being shown as completed.
+  visitedSteps.add(previous);
+  visitedSteps.add(idx);
 
   current = idx;
+
   document.getElementById(`step-${current}`).classList.add('active');
   document.getElementById(`pbtn-${current}`).classList.add('active');
-  document.getElementById(`pbtn-${current}`).classList.remove('done');
-  if (sidebarItems[current]) { sidebarItems[current].classList.add('active'); sidebarItems[current].classList.remove('done'); }
+  if (sidebarItems[current]) sidebarItems[current].classList.add('active');
+
+  // Reset all completed states, then apply completion only to actually visited steps.
+  document.querySelectorAll('.pipe-btn').forEach((btn, i) => {
+    btn.classList.toggle('done', visitedSteps.has(i) && i !== current);
+  });
+
+  sidebarItems.forEach((item, i) => {
+    item.classList.toggle('done', visitedSteps.has(i) && i !== current);
+  });
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
